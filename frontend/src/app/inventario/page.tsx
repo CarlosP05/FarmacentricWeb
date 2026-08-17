@@ -3,7 +3,18 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-// Definimos las estructuras
+// Definimos la estructura exacta que nos envía tu Python
+interface LoteInventario {
+    LoteID: number;
+    Producto: string;
+    NumeroLote: string;
+    FechaVencimiento: string;
+    CantidadActual: number;
+    StockMinimo: number;
+    EsControlado: boolean;
+    AlertaStock: boolean;
+}
+
 interface ProductoCatalogo {
     ProductoID: number;
     Nombre: string;
@@ -13,17 +24,17 @@ export default function InventarioPage() {
     const router = useRouter();
     const [cargando, setCargando] = useState(false);
 
-    // Estado para controlar la ventana emergente (Modal)
+    // NUEVO: Aquí guardaremos la lista real que nos mande Python
+    const [inventario, setInventario] = useState<LoteInventario[]>([]);
     const [mostrarModal, setMostrarModal] = useState(false);
 
-    // Estados para el formulario de nuevo ingreso
+    // Estados para el formulario
     const [productoId, setProductoId] = useState(1);
     const [numeroLote, setNumeroLote] = useState("");
     const [fechaFabricacion, setFechaFabricacion] = useState("");
     const [fechaVencimiento, setFechaVencimiento] = useState("");
     const [cantidad, setCantidad] = useState(0);
 
-    // Catálogo rápido para el menú desplegable (El mismo de tu BD)
     const productosCatalog: ProductoCatalogo[] = [
         { ProductoID: 1, Nombre: "Paracetamol 500mg" },
         { ProductoID: 2, Nombre: "Amoxicilina 500mg" },
@@ -31,15 +42,30 @@ export default function InventarioPage() {
         { ProductoID: 4, Nombre: "Vitamina C 1000mg" }
     ];
 
+    // NUEVO: Función para pedirle los datos a Python
+    const cargarInventario = async () => {
+        try {
+            // Nota: Asumo que tu ruta en Python se llama /inventario. Si se llama diferente, cámbiala aquí.
+            const response = await fetch("http://127.0.0.1:8000/inventario");
+            if (response.ok) {
+                const data = await response.json();
+                setInventario(data); // Guardamos los datos reales
+            }
+        } catch (error) {
+            console.error("Error al cargar la tabla:", error);
+        }
+    };
+
     useEffect(() => {
-        // Verificamos sesión
         const usuarioGuardado = localStorage.getItem("usuario");
         if (!usuarioGuardado) {
             router.push("/login");
+        } else {
+            // Si el usuario es válido, cargamos la tabla inmediatamente
+            cargarInventario();
         }
     }, [router]);
 
-    // Función para registrar el camión del proveedor
     const registrarIngreso = async (e: React.FormEvent) => {
         e.preventDefault();
         setCargando(true);
@@ -61,10 +87,11 @@ export default function InventarioPage() {
 
             if (response.ok) {
                 alert("✅ " + data.mensaje);
-                setMostrarModal(false); // Cerramos la ventana
-                // Limpiamos el formulario
+                setMostrarModal(false);
                 setNumeroLote("");
                 setCantidad(0);
+                // NUEVO: Refrescamos la tabla automáticamente para ver las nuevas cajas
+                cargarInventario();
             } else {
                 alert("❌ Error: " + JSON.stringify(data.detail, null, 2));
             }
@@ -79,7 +106,6 @@ export default function InventarioPage() {
         <div className="min-h-screen bg-gray-100 p-8 relative">
             <div className="mx-auto max-w-5xl rounded-xl bg-white p-6 shadow-lg">
 
-                {/* Encabezado */}
                 <div className="mb-6 flex items-center justify-between border-b pb-4">
                     <div>
                         <h1 className="text-2xl font-bold text-gray-800">📦 Gestión de Bodega e Inventario</h1>
@@ -101,7 +127,6 @@ export default function InventarioPage() {
                     </div>
                 </div>
 
-                {/* Tabla de Inventario (Visual - Pronto la conectaremos con un GET) */}
                 <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200 border">
                         <thead className="bg-gray-50">
@@ -114,27 +139,44 @@ export default function InventarioPage() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200 bg-white">
-                            {/* Ejemplo estático temporal basado en tus datos SQL */}
-                            <tr>
-                                <td className="whitespace-nowrap px-6 py-4 font-medium text-gray-900">Paracetamol 500mg</td>
-                                <td className="whitespace-nowrap px-6 py-4 text-gray-500">L-PARA-001</td>
-                                <td className="whitespace-nowrap px-6 py-4 text-gray-500">2026-12-31</td>
-                                <td className="whitespace-nowrap px-6 py-4 font-bold text-green-600">100 Cajas</td>
-                                <td className="whitespace-nowrap px-6 py-4"><span className="rounded-full bg-green-100 px-2 py-1 text-xs font-semibold text-green-800">Óptimo</span></td>
-                            </tr>
-                            <tr>
-                                <td className="whitespace-nowrap px-6 py-4 font-medium text-gray-900">Vitamina C 1000mg</td>
-                                <td className="whitespace-nowrap px-6 py-4 text-gray-500">L-VITC-001</td>
-                                <td className="whitespace-nowrap px-6 py-4 text-gray-500">2024-11-10</td>
-                                <td className="whitespace-nowrap px-6 py-4 font-bold text-red-600">5 Frascos</td>
-                                <td className="whitespace-nowrap px-6 py-4"><span className="rounded-full bg-red-100 px-2 py-1 text-xs font-semibold text-red-800">Stock Crítico</span></td>
-                            </tr>
+
+                            {/* MAGIA: Iteramos sobre los datos reales de tu base de datos */}
+                            {inventario.length === 0 ? (
+                                <tr>
+                                    <td colSpan={5} className="px-6 py-4 text-center text-gray-500">
+                                        Cargando inventario o sin productos...
+                                    </td>
+                                </tr>
+                            ) : (
+                                inventario.map((item) => (
+                                    <tr key={item.LoteID} className="hover:bg-gray-50 transition">
+                                        <td className="whitespace-nowrap px-6 py-4 font-medium text-gray-900">{item.Producto}</td>
+                                        <td className="whitespace-nowrap px-6 py-4 text-gray-500">{item.NumeroLote}</td>
+                                        <td className="whitespace-nowrap px-6 py-4 text-gray-500">{item.FechaVencimiento}</td>
+
+                                        {/* Cambiamos el color del número si hay alerta */}
+                                        <td className={`whitespace-nowrap px-6 py-4 font-bold ${item.AlertaStock ? 'text-red-600' : 'text-green-600'}`}>
+                                            {item.CantidadActual} Unidades
+                                        </td>
+
+                                        {/* Etiqueta dinámica de estado */}
+                                        <td className="whitespace-nowrap px-6 py-4">
+                                            {item.AlertaStock ? (
+                                                <span className="rounded-full bg-red-100 px-2 py-1 text-xs font-semibold text-red-800">Stock Crítico</span>
+                                            ) : (
+                                                <span className="rounded-full bg-green-100 px-2 py-1 text-xs font-semibold text-green-800">Óptimo</span>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))
+                            )}
+
                         </tbody>
                     </table>
                 </div>
             </div>
 
-            {/* Ventana Emergente (Modal) para registrar ingresos */}
+            {/* Ventana Emergente (Modal) */}
             {mostrarModal && (
                 <div className="absolute inset-0 z-10 flex items-center justify-center bg-black bg-opacity-50">
                     <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl">
