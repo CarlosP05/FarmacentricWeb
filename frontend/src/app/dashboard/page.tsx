@@ -63,7 +63,9 @@ export default function DashboardPage() {
                         <p className="mt-2 text-sm text-gray-600">Registrar nuevas ventas, cobrar y emitir tickets.</p>
                     </div>
 
-                    <div className="cursor-pointer rounded-lg border bg-emerald-50 p-6 transition hover:shadow-lg">
+                    <div
+                        onClick={() => router.push("/inventario")}
+                        className="cursor-pointer rounded-lg border bg-emerald-50 p-6 transition hover:shadow-lg">
                         <h3 className="text-xl font-bold text-emerald-800">📦 Inventario</h3>
                         <p className="mt-2 text-sm text-gray-600">Control de Lotes, caducidades y alertas de stock.</p>
                     </div>
