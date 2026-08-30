@@ -1,11 +1,21 @@
-# pyrefly: ignore [missing-import]
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date, ForeignKey, LargeBinary, Numeric
-# pyrefly: ignore [missing-import]
-from sqlalchemy.orm import relationship
 from datetime import datetime
 from database import Base
+# pyrefly: ignore [missing-import]
+from sqlalchemy import (
+    Boolean,
+    Column,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    LargeBinary,
+    Numeric,
+    String,
+)
+# pyrefly: ignore [missing-import]
+from sqlalchemy.orm import relationship
 
-# 1. Modelo para la tabla Roles
+# 1. ROLES
 class Rol(Base):
     __tablename__ = "Roles"
 
@@ -13,30 +23,23 @@ class Rol(Base):
     NombreRol = Column(String(50), unique=True, nullable=False)
     Descripcion = Column(String(200), nullable=True)
 
-    # Relación: Un rol puede tener muchos usuarios
     usuarios = relationship("Usuario", back_populates="rol")
 
-# 2. Modelo para la tabla Usuarios
+# 2. USUARIOS
 class Usuario(Base):
     __tablename__ = "Usuarios"
 
     UsuarioID = Column(Integer, primary_key=True, index=True)
     NombreUsuario = Column(String(50), unique=True, nullable=False)
-    # Usamos LargeBinary porque en tu SQL lo definiste como VARBINARY(256)
-    ContrasenaHash = Column(LargeBinary(length=256), nullable=False) 
+    ContrasenaHash = Column(LargeBinary(length=256), nullable=False)
     RolID = Column(Integer, ForeignKey("Roles.RolID"), nullable=False)
     Activo = Column(Boolean, default=True, nullable=False)
     FechaCreacion = Column(DateTime, default=datetime.now, nullable=False)
     UltimoAcceso = Column(DateTime, nullable=True)
 
-    # Relación: Un usuario pertenece a un solo rol
     rol = relationship("Rol", back_populates="usuarios")
 
-# ==========================================
-# MODELOS DE INVENTARIO
-# ==========================================
-
-# 3. Modelo para la tabla Proveedores
+# 3. PROVEEDORES
 class Proveedor(Base):
     __tablename__ = "Proveedores"
 
@@ -47,10 +50,9 @@ class Proveedor(Base):
     Correo = Column(String(100), nullable=True)
     Direccion = Column(String(150), nullable=True)
 
-    # Relación: Un proveedor puede surtir muchos productos
     productos = relationship("Producto", back_populates="proveedor")
 
-# 4. Modelo para la tabla CategoriasProducto
+# 4. CATEGORIAS
 class Categoria(Base):
     __tablename__ = "CategoriasProducto"
 
@@ -58,10 +60,9 @@ class Categoria(Base):
     Nombre = Column(String(60), unique=True, nullable=False)
     RequiereReceta = Column(Boolean, default=False, nullable=False)
 
-    # Relación: Una categoría tiene muchos productos
     productos = relationship("Producto", back_populates="categoria")
 
-# 5. Modelo para la tabla Productos
+# 5. PRODUCTOS
 class Producto(Base):
     __tablename__ = "Productos"
 
@@ -76,12 +77,11 @@ class Producto(Base):
     UnidadMedida = Column(String(20), default="Unidad", nullable=False)
     Activo = Column(Boolean, default=True, nullable=False)
 
-    # Relaciones
     categoria = relationship("Categoria", back_populates="productos")
     proveedor = relationship("Proveedor", back_populates="productos")
     lotes = relationship("Lote", back_populates="producto")
 
-# 6. Modelo para la tabla Lotes (Inventario real y caducidades)
+# 6. LOTES
 class Lote(Base):
     __tablename__ = "Lotes"
 
@@ -94,14 +94,9 @@ class Lote(Base):
     CantidadActual = Column(Integer, nullable=False)
     FechaIngreso = Column(DateTime, default=datetime.now, nullable=False)
 
-    # Relación
     producto = relationship("Producto", back_populates="lotes")
 
-# ==========================================
-# MODELOS DE VENTAS (POS)
-# ==========================================
-
-# 7. Modelo para la tabla Ventas
+# 7. VENTAS
 class Venta(Base):
     __tablename__ = "Ventas"
 
@@ -111,11 +106,10 @@ class Venta(Base):
     Total = Column(Numeric(10, 2), default=0, nullable=False)
     MetodoPago = Column(String(20), nullable=False)
 
-    # Relaciones
     usuario = relationship("Usuario")
     detalles = relationship("DetalleVenta", back_populates="venta")
 
-# 8. Modelo para la tabla DetalleVentas
+# 8. DETALLE VENTAS
 class DetalleVenta(Base):
     __tablename__ = "DetalleVentas"
 
@@ -125,25 +119,17 @@ class DetalleVenta(Base):
     LoteID = Column(Integer, ForeignKey("Lotes.LoteID"), nullable=False)
     Cantidad = Column(Integer, nullable=False)
     PrecioUnitario = Column(Numeric(10, 2), nullable=False)
-    # Nota: No mapeamos "Subtotal" porque en tu SQL es una columna calculada (AS PERSISTED)
-    # SQL Server hará esa multiplicación por nosotros automáticamente.
 
-    # Relaciones
     venta = relationship("Venta", back_populates="detalles")
     producto = relationship("Producto")
     lote = relationship("Lote")
 
-# ==========================================
-# MODELOS DE RECURSOS HUMANOS (RRHH)
-# ==========================================
-
-# 9. Modelo para la tabla Empleados
-# 9. Modelo para la tabla Empleados
+# 9. EMPLEADOS
 class Empleado(Base):
     __tablename__ = "Empleados"
 
     EmpleadoID = Column(Integer, primary_key=True, index=True)
-    UsuarioID = Column(Integer, ForeignKey("Usuarios.UsuarioID"), unique=True, nullable=False) 
+    UsuarioID = Column(Integer, ForeignKey("Usuarios.UsuarioID"), unique=True, nullable=False)
     Nombre = Column(String(80), nullable=False)
     Apellido = Column(String(80), nullable=False)
     Cedula = Column(String(20), unique=True, nullable=False)
@@ -152,5 +138,17 @@ class Empleado(Base):
     SalarioBase = Column(Numeric(10, 2), nullable=False)
     Activo = Column(Boolean, default=True, nullable=False)
 
-    # Relación
+    usuario = relationship("Usuario")
+
+# 10. GASTOS OPERATIVOS
+class GastoOperativo(Base):
+    __tablename__ = "GastosOperativos"
+
+    GastoID = Column(Integer, primary_key=True, index=True)
+    Concepto = Column(String(150), nullable=False)
+    Monto = Column(Numeric(10, 2), nullable=False)
+    Categoria = Column(String(50), nullable=False)
+    FechaGasto = Column(Date, nullable=False)
+    RegistradoPor = Column(Integer, ForeignKey("Usuarios.UsuarioID"), nullable=False)
+
     usuario = relationship("Usuario")
