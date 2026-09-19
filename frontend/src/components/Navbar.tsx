@@ -8,7 +8,7 @@ import { useRouter, usePathname } from "next/navigation";
 
 import Link from "next/link";
 
-import { Pill, ShoppingCart, Package, Users, DollarSign, BarChart2, LogOut } from "lucide-react";
+import { Pill, ShoppingCart, Package, Users, DollarSign, BarChart2, LogOut, Tag } from "lucide-react";
 
 
 
@@ -61,6 +61,8 @@ export default function Navbar() {
         { href: "/pos", label: "POS", icon: ShoppingCart, visible: esAdmin || esCajero },
 
         { href: "/inventario", label: "Inventario", icon: Package, visible: esAdmin || esCajero },
+
+        { href: "/catalogo", label: "Catálogo", icon: Tag, visible: esAdmin || esCajero },
 
         { href: "/rrhh", label: "RRHH", icon: Users, visible: esAdmin || esRRHH },
 

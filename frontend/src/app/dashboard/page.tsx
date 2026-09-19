@@ -11,6 +11,7 @@ import {
     ShoppingCart, Package, Users, DollarSign,
 
     BarChart2, ChevronRight, LogOut, Pill,
+    Tag,
 
 } from "lucide-react";
 
@@ -75,12 +76,12 @@ const MODULOS: Modulo[] = [
     {
         key: "catalogo",
         titulo: "Catálogo",
-        descripcion: "Administre los nombres, categorías y precios base de los medicamentos.",
+        descripcion: "Administre medicamentos, categorías, precios y proveedores.",
         ruta: "/catalogo",
-        icon: Package,
-        color: "#3B82F6",
-        colorBg: "rgba(59,130,246,0.08)",
-        colorBorder: "#3B82F6",
+        icon: Tag,
+        color: "#0EA5E9",
+        colorBg: "rgba(14,165,233,0.08)",
+        colorBorder: "#0EA5E9",
         roles: ["Administrador", "Cajero/Farmacéutico"],
         badge: "Catálogo",
     },
