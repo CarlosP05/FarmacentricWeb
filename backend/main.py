@@ -138,6 +138,51 @@ def iniciar_sesion(datos: LoginRequest, db: Session = Depends(get_db)):
     else:
         raise HTTPException(status_code=401, detail="Contraseña incorrecta")
 
+# ==========================================
+# RUTAS DE CATÁLOGO (CATEGORÍAS Y PROVEEDORES)
+# ==========================================
+
+class NuevoProductoRequest(BaseModel):
+    nombre: str
+    categoria_id: int
+    proveedor_id: int
+    precio_compra: float
+    precio_venta: float
+    stock_minimo: int
+    es_controlado: bool
+    unidad_medida: str
+
+@app.get("/categorias")
+def obtener_categorias(db: Session = Depends(get_db)):
+    categorias_db = db.query(Categoria).all()
+    return [{"CategoriaID": c.CategoriaID, "Nombre": c.Nombre} for c in categorias_db]
+
+@app.get("/proveedores")
+def obtener_proveedores(db: Session = Depends(get_db)):
+    proveedores_db = db.query(Proveedor).all()
+    return [{"ProveedorID": p.ProveedorID, "NombreEmpresa": p.NombreEmpresa} for p in proveedores_db]
+
+@app.post("/productos-catalogo")
+def crear_nuevo_producto(datos: NuevoProductoRequest, db: Session = Depends(get_db)):
+    nuevo_producto = Producto(
+        Nombre=datos.nombre,
+        CategoriaID=datos.categoria_id,
+        ProveedorID=datos.proveedor_id,
+        PrecioCompra=datos.precio_compra,
+        PrecioVenta=datos.precio_venta,
+        StockMinimo=datos.stock_minimo,
+        EsControlado=datos.es_controlado,
+        UnidadMedida=datos.unidad_medida,
+        Activo=True
+    )
+    db.add(nuevo_producto)
+    db.commit()
+    db.refresh(nuevo_producto)
+    
+    return {
+        "exito": True, 
+        "mensaje": f"Producto '{datos.nombre}' agregado al catálogo exitosamente."
+    }
 
 # ==========================================
 # RUTAS DE PRODUCTOS E INVENTARIO

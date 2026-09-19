@@ -81,6 +81,8 @@ class Producto(Base):
     proveedor = relationship("Proveedor", back_populates="productos")
     lotes = relationship("Lote", back_populates="producto")
 
+
+
 # 6. LOTES
 class Lote(Base):
     __tablename__ = "Lotes"
