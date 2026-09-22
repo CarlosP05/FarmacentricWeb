@@ -163,7 +163,7 @@ export default function POSPage() {
     const itemsConReceta = carrito.filter((i) => i.requiere_receta).length;
 
     return (
-        <div className="min-h-screen flex flex-col" style={{ backgroundColor: "var(--background)" }}>
+        <div className="min-h-screen flex flex-col">
 
             {/* ── Modal de confirmación de receta ── */}
             {recetaPendiente && (

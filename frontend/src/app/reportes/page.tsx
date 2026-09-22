@@ -66,7 +66,7 @@ export default function ReportesPage() {
         : "0.0";
 
     return (
-        <div className="min-h-screen flex flex-col" style={{ backgroundColor: "var(--background)" }}>
+        <div className="min-h-screen flex flex-col">
 
             {/* ── Header ── */}
             <div className="px-6 py-3 shadow-md flex items-center justify-between" style={{ backgroundColor: "var(--primary)" }}>

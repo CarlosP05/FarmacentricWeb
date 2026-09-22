@@ -167,7 +167,7 @@ export default function RRHHPage() {
     };
 
     return (
-        <div className="min-h-screen flex flex-col" style={{ backgroundColor: "var(--background)" }}>
+        <div className="min-h-screen flex flex-col">
 
             {/* ── Modal nuevo empleado ── */}
             {mostrarModal && (

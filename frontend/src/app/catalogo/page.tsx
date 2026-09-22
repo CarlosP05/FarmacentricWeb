@@ -158,7 +158,7 @@ export default function CatalogoPage() {
     };
 
     return (
-        <div className="min-h-screen flex flex-col" style={{ backgroundColor: "var(--background)" }}>
+        <div className="min-h-screen flex flex-col">
 
             {/* ── Modal nuevo producto ── */}
             {mostrarModal && (

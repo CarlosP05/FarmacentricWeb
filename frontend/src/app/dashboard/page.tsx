@@ -268,7 +268,7 @@ export default function DashboardPage() {
 
     return (
 
-        <div className="min-h-screen" style={{ backgroundColor: "var(--background)" }}>
+        <div className="min-h-screen flex flex-col">
 
             {/* ── Header bar ── */}
 

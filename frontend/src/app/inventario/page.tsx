@@ -156,7 +156,7 @@ export default function InventarioPage() {
     };
 
     return (
-        <div className="min-h-screen flex flex-col" style={{ backgroundColor: "var(--background)" }}>
+        <div className="min-h-screen flex flex-col">
 
             {/* ── Modal ingreso de lote ── */}
             {mostrarModal && (

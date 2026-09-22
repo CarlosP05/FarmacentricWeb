@@ -154,8 +154,7 @@ export default function FinanzasPage() {
     };
 
     return (
-        <div className="min-h-screen flex flex-col" style={{ backgroundColor: "var(--background)" }}>
-
+        <div className="min-h-screen flex flex-col">
             {/* ── Modal nuevo gasto ── */}
             {mostrarModal && (
                 <div

@@ -6,6 +6,7 @@
 
 :root {
 
+
     --primary: #0B2447;
 
     --primary-light: #19376D;
@@ -41,43 +42,30 @@
 }
 
 
-
 * {
 
     scrollbar-width: none;
-
 }
 
 *::-webkit-scrollbar {
-
     display: none;
 
 }
 
-
-
 body {
-
     background-color: var(--background);
-
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220' opacity='0.045'%3E%3Crect x='15' y='55' width='68' height='24' rx='12' fill='%230B2447' transform='rotate(-35 49 67)'/%3E%3Crect x='118' y='22' width='52' height='19' rx='9.5' fill='%230B2447' transform='rotate(22 144 31)'/%3E%3Ccircle cx='172' cy='135' r='13' fill='%230B2447'/%3E%3Crect x='38' y='148' width='58' height='21' rx='10.5' fill='%230B2447' transform='rotate(52 67 158)'/%3E%3Ccircle cx='175' cy='185' r='8' fill='%230B2447'/%3E%3Crect x='148' y='80' width='35' height='13' rx='6.5' fill='%230B2447' transform='rotate(-18 165 86)'/%3E%3C/svg%3E");
+    background-size: 220px 220px;
+    background-attachment: fixed;
     color: var(--text-primary);
-
     font-family: var(--font-geist-sans), system-ui, sans-serif;
-
 }
-
-
 
 .font-display {
-
     font-family: 'DM Serif Display', Georgia, serif;
-
 }
 
-
-
 @keyframes slideDown {
-
     from {
         opacity: 0;
         transform: translateY(-8px);
@@ -87,19 +75,13 @@ body {
         opacity: 1;
         transform: translateY(0);
     }
-
 }
 
 .animate-slide-down {
-
     animation: slideDown 0.2s ease-out forwards;
-
 }
 
-
-
 @keyframes fadeIn {
-
     from {
         opacity: 0;
     }
@@ -107,27 +89,18 @@ body {
     to {
         opacity: 1;
     }
-
 }
 
 .animate-fade-in {
-
     animation: fadeIn 0.3s ease-out forwards;
-
 }
 
-
-
 @keyframes spin {
-
     to {
         transform: rotate(360deg);
     }
-
 }
 
 .animate-spin-fast {
-
     animation: spin 0.7s linear infinite;
-
 }
