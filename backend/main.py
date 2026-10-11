@@ -26,7 +26,8 @@ from sqlalchemy import text
 # pyrefly: ignore [missing-import]
 from sqlalchemy.orm import Session
 # pyrefly: ignore [missing-import]
-from sqlalchemy import func
+from sqlalchemy import func, cast, Date
+from datetime import timedelta, datetime as dt
 
 app = FastAPI(title="Farmacentric API")
 
@@ -402,3 +403,26 @@ def estado_de_resultados(db: Session = Depends(get_db)):
         "gastos_operativos": float(gastos_operativos),
         "ganancia_neta": float(ganancia_neta)
     }
+
+@app.get("/reportes/ventas-semana")
+def ventas_semana(db: Session = Depends(get_db)):
+    # Calculamos la fecha de hace 7 días
+    fecha_limite = dt.now() - timedelta(days=7)
+    
+    # Agrupamos las ventas por día usando SQLAlchemy
+    resultados = db.query(
+        cast(Venta.FechaVenta, Date).label('fecha'),
+        func.sum(Venta.Total).label('total')
+    ).filter(Venta.FechaVenta >= fecha_limite).group_by(cast(Venta.FechaVenta, Date)).order_by('fecha').all()
+    
+    return [{"fecha": str(r.fecha), "total": float(r.total)} for r in resultados]
+
+@app.get("/reportes/gastos-distribucion")
+def gastos_distribucion(db: Session = Depends(get_db)):
+    # Sumamos los gastos agrupados por categoría
+    resultados = db.query(
+        GastoOperativo.Categoria,
+        func.sum(GastoOperativo.Monto).label('total')
+    ).group_by(GastoOperativo.Categoria).all()
+    
+    return [{"name": r.Categoria, "value": float(r.total)} for r in resultados]
