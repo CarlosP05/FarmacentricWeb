@@ -16,15 +16,18 @@ import {
     PackageOpen,
     FileText,
     AlertTriangle,
+    RefreshCw,
 } from "lucide-react";
 
 interface Producto {
     ProductoID: number;
     Nombre: string;
     PrecioVenta: number;
-    LoteID: number;
+    LoteID: number | null;
     Categoria: string;
     RequiereReceta: boolean;
+    StockTotal: number;
+    StockVencido?: number;
 }
 
 interface ItemCarrito {
@@ -32,25 +35,23 @@ interface ItemCarrito {
     nombre: string;
     precio: number;
     cantidad: number;
-    lote_id: number;
+    lote_id: number | null;
     categoria: string;
     requiere_receta: boolean;
+    stock_maximo: number;
 }
 
 type MensajeEstado = { tipo: "exito" | "error"; texto: string } | null;
 
-const productosCatalog: Producto[] = [
-    { ProductoID: 1, Nombre: "Paracetamol 500mg", PrecioVenta: 3.0, LoteID: 1, Categoria: "Analgésico", RequiereReceta: false },
-    { ProductoID: 2, Nombre: "Amoxicilina 500mg", PrecioVenta: 12.0, LoteID: 2, Categoria: "Antibiótico", RequiereReceta: true },
-    { ProductoID: 3, Nombre: "Diazepam 10mg", PrecioVenta: 35.0, LoteID: 3, Categoria: "Controlado", RequiereReceta: true },
-    { ProductoID: 4, Nombre: "Vitamina C 1000mg", PrecioVenta: 15.0, LoteID: 4, Categoria: "Suplemento", RequiereReceta: false },
-];
-
 const CATEGORIA_COLORS: Record<string, { bg: string; color: string }> = {
     "Analgésico": { bg: "rgba(14,165,233,0.1)", color: "#0369A1" },
+    "Analgésicos": { bg: "rgba(14,165,233,0.1)", color: "#0369A1" },
     "Antibiótico": { bg: "rgba(5,150,105,0.1)", color: "#065F46" },
+    "Antibióticos": { bg: "rgba(5,150,105,0.1)", color: "#065F46" },
     "Controlado": { bg: "rgba(220,38,38,0.1)", color: "#991B1B" },
+    "Psicotrópicos": { bg: "rgba(220,38,38,0.1)", color: "#991B1B" },
     "Suplemento": { bg: "rgba(217,119,6,0.1)", color: "#92400E" },
+    "Vitaminas": { bg: "rgba(217,119,6,0.1)", color: "#92400E" },
 };
 
 const METODOS_PAGO = [
@@ -61,25 +62,50 @@ const METODOS_PAGO = [
 export default function POSPage() {
     const router = useRouter();
     const [usuarioId, setUsuarioId] = useState<number>(0);
+    const [productosCatalog, setProductosCatalog] = useState<Producto[]>([]);
+    const [cargandoCatalogo, setCargandoCatalogo] = useState(true);
     const [carrito, setCarrito] = useState<ItemCarrito[]>([]);
     const [cargando, setCargando] = useState(false);
     const [metodoPago, setMetodoPago] = useState("Efectivo");
     const [mensaje, setMensaje] = useState<MensajeEstado>(null);
-    // Producto pendiente de confirmación de receta
     const [recetaPendiente, setRecetaPendiente] = useState<Producto | null>(null);
+
+    const cargarProductosPOS = async () => {
+        setCargandoCatalogo(true);
+        try {
+            const res = await fetch("http://127.0.0.1:8000/productos");
+            if (res.ok) {
+                setProductosCatalog(await res.json());
+            }
+        } catch {
+            setMensaje({ tipo: "error", texto: "No se pudo cargar el catálogo desde el servidor." });
+        } finally {
+            setCargandoCatalogo(false);
+        }
+    };
 
     useEffect(() => {
         const stored = localStorage.getItem("usuario");
         if (!stored) { router.push("/login"); return; }
         const user = JSON.parse(stored);
         setUsuarioId(user.id || user.usuario_id || user.UsuarioID || 3);
+        cargarProductosPOS();
     }, [router]);
 
     const confirmarYAgregar = (producto: Producto) => {
         setMensaje(null);
+        if (producto.StockTotal <= 0) {
+            setMensaje({ tipo: "error", texto: `No hay unidades disponibles de ${producto.Nombre} en bodega.` });
+            return;
+        }
+
         setCarrito((prev) => {
             const existe = prev.find((i) => i.producto_id === producto.ProductoID);
             if (existe) {
+                if (existe.cantidad + 1 > producto.StockTotal) {
+                    setMensaje({ tipo: "error", texto: `Solo existen ${producto.StockTotal} unidades disponibles de ${producto.Nombre}.` });
+                    return prev;
+                }
                 return prev.map((i) =>
                     i.producto_id === producto.ProductoID ? { ...i, cantidad: i.cantidad + 1 } : i
                 );
@@ -94,13 +120,19 @@ export default function POSPage() {
                     lote_id: producto.LoteID,
                     categoria: producto.Categoria,
                     requiere_receta: producto.RequiereReceta,
+                    stock_maximo: producto.StockTotal,
                 },
             ];
         });
     };
 
     const handleClickProducto = (producto: Producto) => {
-        if (producto.RequiereReceta) {
+        if (producto.StockTotal <= 0) {
+            setMensaje({ tipo: "error", texto: `El producto ${producto.Nombre} está agotado.` });
+            return;
+        }
+        const yaEnCarrito = carrito.find((i) => i.producto_id === producto.ProductoID);
+        if (producto.RequiereReceta && !yaEnCarrito) {
             setRecetaPendiente(producto);
         } else {
             confirmarYAgregar(producto);
@@ -110,7 +142,17 @@ export default function POSPage() {
     const cambiarCantidad = (producto_id: number, delta: number) => {
         setCarrito((prev) =>
             prev
-                .map((i) => i.producto_id === producto_id ? { ...i, cantidad: i.cantidad + delta } : i)
+                .map((i) => {
+                    if (i.producto_id === producto_id) {
+                        const nuevaCant = i.cantidad + delta;
+                        if (nuevaCant > i.stock_maximo) {
+                            setMensaje({ tipo: "error", texto: `Stock máximo alcanzado (${i.stock_maximo} uds).` });
+                            return i;
+                        }
+                        return { ...i, cantidad: nuevaCant };
+                    }
+                    return i;
+                })
                 .filter((i) => i.cantidad > 0)
         );
     };
@@ -149,6 +191,7 @@ export default function POSPage() {
             if (res.ok) {
                 setMensaje({ tipo: "exito", texto: `Venta #${data.venta_id} registrada · Total: C$ ${data.total_cobrado?.toFixed(2)}` });
                 setCarrito([]);
+                cargarProductosPOS(); // Actualiza el stock en pantalla inmediatamente
             } else {
                 setMensaje({ tipo: "error", texto: typeof data.detail === "string" ? data.detail : JSON.stringify(data.detail) });
             }
@@ -175,7 +218,6 @@ export default function POSPage() {
                         className="w-full max-w-sm rounded-2xl p-6 animate-slide-down"
                         style={{ backgroundColor: "var(--surface)", boxShadow: "var(--shadow-xl)" }}
                     >
-                        {/* Icono de advertencia */}
                         <div className="flex justify-center mb-4">
                             <div
                                 className="w-14 h-14 rounded-2xl flex items-center justify-center"
@@ -185,22 +227,13 @@ export default function POSPage() {
                             </div>
                         </div>
 
-                        <h3
-                            className="text-center font-semibold text-base mb-1"
-                            style={{ color: "var(--text-primary)" }}
-                        >
+                        <h3 className="text-center font-semibold text-base mb-1" style={{ color: "var(--text-primary)" }}>
                             Requiere Receta Médica
                         </h3>
-                        <p
-                            className="text-center text-sm mb-1"
-                            style={{ color: "var(--text-muted)" }}
-                        >
+                        <p className="text-center text-sm mb-1" style={{ color: "var(--text-muted)" }}>
                             <strong style={{ color: "var(--text-primary)" }}>{recetaPendiente.Nombre}</strong>
                         </p>
-                        <p
-                            className="text-center text-xs leading-relaxed mb-6"
-                            style={{ color: "var(--text-muted)" }}
-                        >
+                        <p className="text-center text-xs leading-relaxed mb-6" style={{ color: "var(--text-muted)" }}>
                             Este medicamento está sujeto a control de prescripción médica.
                             ¿Confirma que el cliente presenta una receta válida y vigente?
                         </p>
@@ -226,8 +259,6 @@ export default function POSPage() {
                                     color: "var(--text-muted)",
                                     border: "1.5px solid var(--border)",
                                 }}
-                                onMouseEnter={(e) => (e.currentTarget.style.borderColor = "#94A3B8")}
-                                onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
                             >
                                 Cancelar
                             </button>
@@ -241,8 +272,6 @@ export default function POSPage() {
                                     backgroundColor: "#D97706",
                                     boxShadow: "0 4px 12px rgba(217,119,6,0.3)",
                                 }}
-                                onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#B45309")}
-                                onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "#D97706")}
                             >
                                 Receta presentada ✓
                             </button>
@@ -262,16 +291,24 @@ export default function POSPage() {
                         <p className="text-blue-300 text-xs mt-0.5">Terminal POS · Farmacentric</p>
                     </div>
                 </div>
-                <button
-                    onClick={() => router.push("/dashboard")}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white transition-all duration-150 active:scale-95"
-                    style={{ backgroundColor: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.15)" }}
-                    onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.18)")}
-                    onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.1)")}
-                >
-                    <ArrowLeft size={13} />
-                    Panel
-                </button>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={cargarProductosPOS}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white transition-all duration-150 active:scale-95"
+                        style={{ backgroundColor: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.15)" }}
+                    >
+                        <RefreshCw size={12} />
+                        Actualizar Stock
+                    </button>
+                    <button
+                        onClick={() => router.push("/dashboard")}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white transition-all duration-150 active:scale-95"
+                        style={{ backgroundColor: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.15)" }}
+                    >
+                        <ArrowLeft size={13} />
+                        Panel
+                    </button>
+                </div>
             </div>
 
             {/* ── Mensaje de estado ── */}
@@ -302,7 +339,7 @@ export default function POSPage() {
                                 Catálogo de Productos
                             </h2>
                             <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                                Haga clic para agregar al ticket
+                                Haga clic para agregar al ticket (Stock sincronizado en tiempo real)
                             </p>
                         </div>
                         <div className="flex items-center gap-2">
@@ -322,80 +359,92 @@ export default function POSPage() {
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
-                        {productosCatalog.map((prod) => {
-                            const catColor = CATEGORIA_COLORS[prod.Categoria] ?? { bg: "rgba(100,116,139,0.1)", color: "#475569" };
-                            const enCarrito = carrito.find((i) => i.producto_id === prod.ProductoID);
-                            return (
-                                <button
-                                    key={prod.ProductoID}
-                                    onClick={() => handleClickProducto(prod)}
-                                    className="text-left rounded-2xl p-5 transition-all duration-200 active:scale-[0.97] relative"
-                                    style={{
-                                        backgroundColor: "var(--surface)",
-                                        border: `1.5px solid ${enCarrito ? "var(--accent)" : "var(--border)"}`,
-                                        boxShadow: enCarrito ? "0 0 0 3px rgba(14,165,233,0.1)" : "var(--shadow-sm)",
-                                    }}
-                                    onMouseEnter={(e) => {
-                                        if (!enCarrito) e.currentTarget.style.borderColor = "#94D2F7";
-                                        e.currentTarget.style.transform = "translateY(-2px)";
-                                        e.currentTarget.style.boxShadow = enCarrito
-                                            ? "0 0 0 3px rgba(14,165,233,0.1), var(--shadow-md)"
-                                            : "var(--shadow-md)";
-                                    }}
-                                    onMouseLeave={(e) => {
-                                        e.currentTarget.style.borderColor = enCarrito ? "var(--accent)" : "var(--border)";
-                                        e.currentTarget.style.transform = "translateY(0)";
-                                        e.currentTarget.style.boxShadow = enCarrito ? "0 0 0 3px rgba(14,165,233,0.1)" : "var(--shadow-sm)";
-                                    }}
-                                >
-                                    {/* Badge de receta — esquina superior derecha */}
-                                    {prod.RequiereReceta && (
-                                        <div
-                                            className="absolute top-3 right-3 flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold"
-                                            style={{ backgroundColor: "rgba(217,119,6,0.12)", color: "#B45309" }}
-                                        >
-                                            <FileText size={9} />
-                                            Receta
-                                        </div>
-                                    )}
+                    {cargandoCatalogo ? (
+                        <div className="py-12 text-center text-sm" style={{ color: "var(--text-muted)" }}>
+                            Sincronizando productos y existencias...
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-2 xl:grid-cols-3 gap-4">
+                            {productosCatalog.map((prod) => {
+                                const catColor = CATEGORIA_COLORS[prod.Categoria] ?? { bg: "rgba(100,116,139,0.1)", color: "#475569" };
+                                const enCarrito = carrito.find((i) => i.producto_id === prod.ProductoID);
+                                const agotado = prod.StockTotal <= 0;
 
-                                    {/* Icono + contador en carrito */}
-                                    <div className="flex items-start justify-between mb-3">
-                                        <div
-                                            className="w-10 h-10 rounded-xl flex items-center justify-center"
-                                            style={{ backgroundColor: catColor.bg }}
-                                        >
-                                            <Pill size={18} color={catColor.color} />
-                                        </div>
-                                        {enCarrito && (
-                                            <span
-                                                className="text-xs font-bold px-2 py-0.5 rounded-full"
-                                                style={{ backgroundColor: "var(--accent)", color: "white" }}
-                                            >
-                                                ×{enCarrito.cantidad}
-                                            </span>
-                                        )}
-                                    </div>
-
-                                    <h3 className="font-semibold text-sm leading-snug mb-1" style={{ color: "var(--text-primary)" }}>
-                                        {prod.Nombre}
-                                    </h3>
-
-                                    <span
-                                        className="text-[10px] font-medium px-1.5 py-0.5 rounded"
-                                        style={{ backgroundColor: catColor.bg, color: catColor.color }}
+                                return (
+                                    <button
+                                        key={prod.ProductoID}
+                                        onClick={() => handleClickProducto(prod)}
+                                        disabled={agotado}
+                                        className="text-left rounded-2xl p-5 transition-all duration-200 active:scale-[0.97] relative"
+                                        style={{
+                                            backgroundColor: "var(--surface)",
+                                            border: `1.5px solid ${enCarrito ? "var(--accent)" : "var(--border)"}`,
+                                            boxShadow: enCarrito ? "0 0 0 3px rgba(14,165,233,0.1)" : "var(--shadow-sm)",
+                                            opacity: agotado ? 0.55 : 1,
+                                            cursor: agotado ? "not-allowed" : "pointer",
+                                        }}
                                     >
-                                        {prod.Categoria}
-                                    </span>
+                                        {prod.RequiereReceta && (
+                                            <div
+                                                className="absolute top-3 right-3 flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-semibold"
+                                                style={{ backgroundColor: "rgba(217,119,6,0.12)", color: "#B45309" }}
+                                            >
+                                                <FileText size={9} />
+                                                Receta
+                                            </div>
+                                        )}
 
-                                    <p className="mt-3 text-lg font-bold" style={{ color: "var(--success)" }}>
-                                        C$ {prod.PrecioVenta.toFixed(2)}
-                                    </p>
-                                </button>
-                            );
-                        })}
-                    </div>
+                                        <div className="flex items-start justify-between mb-3">
+                                            <div
+                                                className="w-10 h-10 rounded-xl flex items-center justify-center"
+                                                style={{ backgroundColor: catColor.bg }}
+                                            >
+                                                <Pill size={18} color={catColor.color} />
+                                            </div>
+                                            {enCarrito && (
+                                                <span
+                                                    className="text-xs font-bold px-2 py-0.5 rounded-full"
+                                                    style={{ backgroundColor: "var(--accent)", color: "white" }}
+                                                >
+                                                    ×{enCarrito.cantidad}
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        <h3 className="font-semibold text-sm leading-snug mb-1" style={{ color: "var(--text-primary)" }}>
+                                            {prod.Nombre}
+                                        </h3>
+
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <span
+                                                className="text-[10px] font-medium px-1.5 py-0.5 rounded"
+                                                style={{ backgroundColor: catColor.bg, color: catColor.color }}
+                                            >
+                                                {prod.Categoria}
+                                            </span>
+                                            <span
+                                                className="text-[10px] font-semibold px-1.5 py-0.5 rounded"
+                                                style={{
+                                                    backgroundColor: agotado ? "rgba(220,38,38,0.1)" : "rgba(5,150,105,0.1)",
+                                                    color: agotado ? "#DC2626" : "#065F46",
+                                                }}
+                                            >
+                                                {agotado && (prod.StockVencido ?? 0) > 0
+                                                    ? `Bloqueado (${prod.StockVencido} vencidos)`
+                                                    : agotado
+                                                        ? "Agotado (0)"
+                                                        : `Stock vigente: ${prod.StockTotal}`}
+                                            </span>
+                                        </div>
+
+                                        <p className="mt-3 text-lg font-bold" style={{ color: "var(--success)" }}>
+                                            C$ {prod.PrecioVenta.toFixed(2)}
+                                        </p>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
 
                 {/* ── Panel del ticket ── */}
@@ -403,7 +452,6 @@ export default function POSPage() {
                     className="w-80 xl:w-96 flex flex-col rounded-2xl overflow-hidden"
                     style={{ backgroundColor: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-lg)" }}
                 >
-                    {/* Cabecera del ticket */}
                     <div className="px-5 py-4 flex items-center justify-between" style={{ borderBottom: "1px solid var(--border)" }}>
                         <div className="flex items-center gap-2">
                             <ShoppingCart size={15} color="var(--text-muted)" />
@@ -414,8 +462,6 @@ export default function POSPage() {
                                 onClick={limpiarCarrito}
                                 className="text-xs flex items-center gap-1 transition-colors duration-150"
                                 style={{ color: "var(--text-muted)" }}
-                                onMouseEnter={(e) => (e.currentTarget.style.color = "var(--danger)")}
-                                onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
                             >
                                 <Trash2 size={11} />
                                 Limpiar
@@ -423,7 +469,6 @@ export default function POSPage() {
                         )}
                     </div>
 
-                    {/* Aviso de receta en el ticket */}
                     {itemsConReceta > 0 && (
                         <div
                             className="mx-4 mt-3 px-3 py-2 rounded-xl flex items-center gap-2 text-xs animate-slide-down"
@@ -442,7 +487,6 @@ export default function POSPage() {
                         </div>
                     )}
 
-                    {/* Items */}
                     <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
                         {carrito.length === 0 ? (
                             <div className="flex flex-col items-center justify-center h-full py-12 text-center">
@@ -482,14 +526,11 @@ export default function POSPage() {
                                         <p className="text-xs" style={{ color: "var(--text-muted)" }}>C$ {item.precio.toFixed(2)} c/u</p>
                                     </div>
 
-                                    {/* Controles de cantidad */}
                                     <div className="flex items-center gap-1">
                                         <button
                                             onClick={() => cambiarCantidad(item.producto_id, -1)}
                                             className="w-6 h-6 rounded-md flex items-center justify-center transition-all duration-150 active:scale-90"
                                             style={{ backgroundColor: "var(--border)", color: "var(--text-muted)" }}
-                                            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "rgba(220,38,38,0.15)")}
-                                            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--border)")}
                                         >
                                             <Minus size={10} />
                                         </button>
@@ -500,8 +541,6 @@ export default function POSPage() {
                                             onClick={() => cambiarCantidad(item.producto_id, 1)}
                                             className="w-6 h-6 rounded-md flex items-center justify-center transition-all duration-150 active:scale-90"
                                             style={{ backgroundColor: "var(--border)", color: "var(--text-muted)" }}
-                                            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "rgba(14,165,233,0.15)")}
-                                            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "var(--border)")}
                                         >
                                             <Plus size={10} />
                                         </button>
@@ -509,8 +548,6 @@ export default function POSPage() {
                                             onClick={() => eliminarItem(item.producto_id)}
                                             className="w-6 h-6 rounded-md flex items-center justify-center ml-1 transition-all duration-150 active:scale-90"
                                             style={{ color: "var(--text-muted)" }}
-                                            onMouseEnter={(e) => (e.currentTarget.style.color = "var(--danger)")}
-                                            onMouseLeave={(e) => (e.currentTarget.style.color = "var(--text-muted)")}
                                         >
                                             <Trash2 size={11} />
                                         </button>
@@ -520,7 +557,6 @@ export default function POSPage() {
                         )}
                     </div>
 
-                    {/* Footer del ticket */}
                     <div className="px-5 py-4" style={{ borderTop: "1px solid var(--border)" }}>
                         <div className="flex justify-between items-center mb-3">
                             <div>
@@ -534,7 +570,6 @@ export default function POSPage() {
                             </p>
                         </div>
 
-                        {/* Método de pago */}
                         <div className="flex gap-2 mb-4">
                             {METODOS_PAGO.map(({ value, label, icon: Icon }) => (
                                 <button
@@ -553,7 +588,6 @@ export default function POSPage() {
                             ))}
                         </div>
 
-                        {/* Botón cobrar */}
                         <button
                             onClick={cobrarVenta}
                             disabled={cargando || carrito.length === 0}
@@ -563,20 +597,9 @@ export default function POSPage() {
                                 boxShadow: carrito.length === 0 ? "none" : "0 4px 14px rgba(14,165,233,0.35)",
                                 cursor: carrito.length === 0 || cargando ? "not-allowed" : "pointer",
                             }}
-                            onMouseEnter={(e) => {
-                                if (carrito.length > 0 && !cargando) e.currentTarget.style.backgroundColor = "var(--accent-dark)";
-                            }}
-                            onMouseLeave={(e) => {
-                                if (carrito.length > 0 && !cargando) e.currentTarget.style.backgroundColor = "var(--accent)";
-                            }}
                         >
                             {cargando ? (
-                                <>
-                                    <svg className="animate-spin-fast" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                                        <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
-                                    </svg>
-                                    Procesando...
-                                </>
+                                <>Procesando...</>
                             ) : (
                                 <>
                                     <CreditCard size={15} />

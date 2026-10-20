@@ -34,13 +34,6 @@ interface ProductoCatalogo {
 
 type MensajeEstado = { tipo: "exito" | "error"; texto: string } | null;
 
-const productosCatalog: ProductoCatalogo[] = [
-    { ProductoID: 1, Nombre: "Paracetamol 500mg" },
-    { ProductoID: 2, Nombre: "Amoxicilina 500mg" },
-    { ProductoID: 3, Nombre: "Diazepam 10mg" },
-    { ProductoID: 4, Nombre: "Vitamina C 1000mg" },
-];
-
 function diasParaVencer(fechaStr: string): number {
     const hoy = new Date();
     const venc = new Date(fechaStr);
@@ -56,6 +49,7 @@ function formatFecha(fechaStr: string): string {
 export default function InventarioPage() {
     const router = useRouter();
     const [inventario, setInventario] = useState<LoteInventario[]>([]);
+    const [productosCatalog, setProductosCatalog] = useState<ProductoCatalogo[]>([]);
     const [cargandoTabla, setCargandoTabla] = useState(true);
     const [cargandoForm, setCargandoForm] = useState(false);
     const [mostrarModal, setMostrarModal] = useState(false);
@@ -70,8 +64,16 @@ export default function InventarioPage() {
     const cargarInventario = async () => {
         setCargandoTabla(true);
         try {
-            const res = await fetch("http://127.0.0.1:8000/inventario");
-            if (res.ok) setInventario(await res.json());
+            const [resInv, resProd] = await Promise.all([
+                fetch("http://127.0.0.1:8000/inventario"),
+                fetch("http://127.0.0.1:8000/productos"),
+            ]);
+            if (resInv.ok) setInventario(await resInv.json());
+            if (resProd.ok) {
+                const prods = await resProd.json();
+                setProductosCatalog(prods);
+                if (prods.length > 0) setProductoId(prods[0].ProductoID);
+            }
         } catch {
             setMensaje({ tipo: "error", texto: "No se pudo conectar con el servidor." });
         } finally {
@@ -90,7 +92,7 @@ export default function InventarioPage() {
         setFechaFabricacion("");
         setFechaVencimiento("");
         setCantidad("");
-        setProductoId(1);
+        if (productosCatalog.length > 0) setProductoId(productosCatalog[0].ProductoID);
     };
 
     const registrarIngreso = async (e: React.FormEvent) => {
@@ -548,7 +550,7 @@ export default function InventarioPage() {
                                                     <div className="flex items-center gap-2">
                                                         <span
                                                             className="text-sm font-bold"
-                                                            style={{ color: item.AlertaStock ? "#DC2626" : "var(--success)" }}
+                                                            style={{ color: item.AlertaStock ? "#DC2626" : item.CantidadActual === 0 ? "var(--text-muted)" : "var(--success)" }}
                                                         >
                                                             {item.CantidadActual}
                                                         </span>
@@ -570,7 +572,14 @@ export default function InventarioPage() {
 
                                                 {/* Estado */}
                                                 <td className="px-5 py-4">
-                                                    {item.AlertaStock ? (
+                                                    {item.CantidadActual === 0 && !item.AlertaStock ? (
+                                                        <span
+                                                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold"
+                                                            style={{ backgroundColor: "rgba(100,116,139,0.12)", color: "#475569" }}
+                                                        >
+                                                            Agotado (Reabastecido)
+                                                        </span>
+                                                    ) : item.AlertaStock ? (
                                                         <span
                                                             className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold"
                                                             style={{ backgroundColor: "rgba(220,38,38,0.1)", color: "#DC2626" }}
